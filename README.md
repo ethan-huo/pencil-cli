@@ -32,25 +32,25 @@ Instead of raw JSON, `pencil get` outputs a readable JSX snapshot with structura
 pencil --file foo.pen get --parent <nodeId> --depth 6
 ```
 
-```jsx
-const PlanTitle = () => (
+```
+PlanTitle = (
   <Text fill="--foreground" fontFamily="Inter" fontSize={13} fontWeight="600">Trial</Text>
 )
-const UsageLabel = () => (
+UsageLabel = (
   <Text fill="--muted-foreground" fontFamily="Inter" fontSize={11} fontWeight="normal">3 / 7 days left</Text>
 )
-const TrialFill = () => (
+TrialFill = (
   <Frame cornerRadius={2} fill="--muted-foreground" height="fill_container" width={53} />
 )
-const ProgressBar = () => (
+ProgressBar = (
   <Frame cornerRadius={2} fill="--border" height={4} width="fill_container">
-    <TrialFill id="nvTHX" name="trialFill" />
+    <TrialFill id="nvTHX" />
   </Frame>
 )
-const UsageRow = () => (
+UsageRow = (
   <Frame gap={4} layout="vertical" width="fill_container">
-    <UsageLabel id="PY42K" name="Usage Label" />
-    <ProgressBar id="NIvlq" name="Progress Bar" />
+    <UsageLabel id="PY42K" />
+    <ProgressBar id="NIvlq" />
   </Frame>
 )
 

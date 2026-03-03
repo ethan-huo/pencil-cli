@@ -154,7 +154,7 @@ export function formatNodes(jsonText: string): string {
     // Strip id/name from declaration so it reads as the "template"
     const declNode = { ...node, id: undefined, name: undefined }
     const body = toJsx(declNode, comps, 1, true)
-    decls.push(`const ${name} = () => (\n${body}\n)`)
+    decls.push(`${name} = (\n${body}\n)`)
   }
 
   // 4. Render main tree (with substitution)

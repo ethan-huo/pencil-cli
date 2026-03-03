@@ -32,7 +32,7 @@ Instead of raw JSON, `pencil get` outputs a readable JSX snapshot with structura
 pencil --file foo.pen get --parent <nodeId> --depth 6
 ```
 
-```
+```jsx
 PlanTitle = (
   <Text fill="--foreground" fontFamily="Inter" fontSize={13} fontWeight="600">Trial</Text>
 )
@@ -54,11 +54,11 @@ UsageRow = (
   </Frame>
 )
 
-<Frame id="eNsZZ" cornerRadius={10} fill="--muted" gap={10} layout="vertical" padding={12} width={147}>
+<Frame id="eNsZZ" name="freeRef" cornerRadius={10} fill="--muted" gap={10} layout="vertical" padding={12} width={147}>
   <PlanTitle id="MtHmF" />
   <UsageRow id="qj29g" />
-  <Frame id="UzCha" alignItems="center" cornerRadius={6} fill="--primary" height={32} justifyContent="center" width="fill_container">
-    <Text id="ndpmq" fill="--primary-foreground" fontFamily="Inter" fontSize={12} fontWeight="600">Sign In</Text>
+  <Frame id="UzCha" name="Upgrade Button" alignItems="center" cornerRadius={6} fill="--primary" height={32} justifyContent="center" width="fill_container">
+    <Text id="ndpmq" name="Upgrade Text" fill="--primary-foreground" fontFamily="Inter" fontSize={12} fontWeight="600">Sign In</Text>
   </Frame>
 </Frame>
 ```

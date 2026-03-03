@@ -19,7 +19,7 @@ pencil --schema=.<command>    # zoom in on one command
 1. **`--file` is global** — pass it before the subcommand: `pencil --file foo.pen get ...`, not `pencil get --file foo.pen`.
 2. **Pre-flight before any design task** — run canvas discovery first (see below). Never skip.
 3. **Screenshots land in `$PWD/.pencil/screenshots/`** — use the `Read` tool on the printed path to view them.
-4. **Complex inputs use `--input '{...}'`** — for `set-vars`, `replace-props`, and anything flags can't fully express. `--file` still works alongside `--input`.
+4. **Never inline large JSON in shell** — `--input '{"huge":"json"}'` is unreadable and error-prone. Use `--eval` with an object literal or write a `--script` file instead (see below).
 5. **Use `--script` for logic-heavy operations** — loops, conditionals, multi-step sequences → write a `.ts` script, run with `pencil --script ./script.ts`.
 
 ## Pre-flight: Canvas Discovery (MANDATORY)
@@ -32,17 +32,49 @@ pencil --file foo.pen screenshot --node <id>     # visual reference of existing 
 
 If a matching component exists → use `type: "ref", ref: "<componentId>"` instead of rebuilding it.
 
-## Scripting
+## Preferred input patterns
+
+### --eval (best for complex, one-off calls)
+
+Use `--eval` with a plain JS object literal — no JSON escaping, no shell quoting hell:
+
+```bash
+pencil --eval "
+  await argc.handlers['replace-props']({
+    file: 'design/OnType-v2.pen',
+    parents: ['rootId'],
+    properties: {
+      fillColor: [{ from: '#18181B', to: '--card' }],
+      textColor: [{ from: '#FAFAFA', to: '--foreground' }],
+    },
+  })
+"
+```
+
+```bash
+pencil --eval "
+  await argc.handlers['set-vars']({
+    file: 'design/OnType-v2.pen',
+    variables: { '--brand': { light: '#FF8400', dark: '#FF8400' } },
+  })
+"
+```
+
+### --script (best for multi-step or reusable logic)
 
 ```typescript
 // scripts/example.ts
 export async function main(argc) {
-  await argc.handlers.get({ file: 'design/OnType-v2.pen', reusable: true, depth: 2 })
-  await argc.handlers.design({ file: 'design/OnType-v2.pen', ops: `...` })
+  const file = 'design/OnType-v2.pen'
+  await argc.handlers.get({ file, reusable: true, depth: 2 })
+  await argc.handlers.design({ file, ops: `panel=I("canvas", {type:"frame"})` })
 }
 ```
 
 ```bash
 pencil --script ./scripts/example.ts
-pencil --eval "await argc.handlers.vars({})"
 ```
+
+### --input (only for simple flag overrides)
+
+Acceptable only when the payload is small and flat. For anything deeply nested, use `--eval` instead.

@@ -5,7 +5,9 @@ import { toStandardJsonSchema } from '@valibot/to-json-schema'
 import * as v from 'valibot'
 
 import { c, cli, group } from 'argc'
+import { fmt, printTable } from 'argc/terminal'
 import { callTool, print, serverStatus, startServer, stopServer } from './client'
+import { formatNodes } from './formatter'
 
 const s = toStandardJsonSchema
 
@@ -109,6 +111,7 @@ const schema = {
           'resolve-instances': v.optional(v.boolean()),
           'resolve-variables': v.optional(v.boolean()),
           'path-geometry': v.optional(v.boolean()),
+          raw: v.optional(v.boolean()),
         }),
       ),
     ),
@@ -255,6 +258,23 @@ const schema = {
     ),
 }
 
+// ── Var normalization ─────────────────────────────────────────────────────────
+
+// Agents write "--var"; MCP expects "$--var". Normalize before sending.
+// Walks any JSON-serializable value and prefixes bare "--..." strings with "$".
+function addVarPrefix(v: unknown): unknown {
+  if (typeof v === 'string') return v.startsWith('--') ? '$' + v : v
+  if (Array.isArray(v)) return v.map(addVarPrefix)
+  if (v && typeof v === 'object')
+    return Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([k, val]) => [k, addVarPrefix(val)]))
+  return v
+}
+
+// In the design DSL string, quoted "--..." values → "$--..."
+function addVarPrefixInDsl(ops: string): string {
+  return ops.replace(/"(--[a-zA-Z0-9-]+)"/g, (_, name: string) => `"$${name}"`)
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 
 const app = cli(schema, {
@@ -350,7 +370,12 @@ app.run({
       if (input.type) pattern.type = input.type
       if (Object.keys(pattern).length) args.patterns = [pattern]
 
-      print(await callTool('batch_get', args))
+      const result = await callTool('batch_get', args)
+      if (input.raw) {
+        print(result)
+      } else {
+        print({ ...result, text: formatNodes(result.text) })
+      }
     },
 
     design: async ({ input, context }) => {
@@ -371,10 +396,24 @@ app.run({
         process.exit(1)
       }
 
-      const args: Record<string, unknown> = { operations: ops.trim() }
+      const args: Record<string, unknown> = { operations: addVarPrefixInDsl(ops.trim()) }
       if (context.filePath) args.filePath = context.filePath
 
-      print(await callTool('batch_design', args))
+      const result = await callTool('batch_design', args)
+
+      // Workaround: batch_design may escape $ to \$ in variable references.
+      // Post-process the file to fix "\\$--var" → "$--var" if file is known.
+      if (context.filePath) {
+        const file = Bun.file(context.filePath)
+        const text = await file.text()
+        const fixed = text.replace(/\\{1,2}\$--/g, '$--')
+        if (fixed !== text) {
+          await Bun.write(context.filePath, fixed)
+          await callTool('open_document', { filePathOrTemplate: context.filePath })
+        }
+      }
+
+      print(result)
     },
 
     screenshot: async ({ input, context }) => {
@@ -386,7 +425,35 @@ app.run({
     vars: async ({ context }) => {
       const args: Record<string, unknown> = {}
       if (context.filePath) args.filePath = context.filePath
-      print(await callTool('get_variables', args))
+      const result = await callTool('get_variables', args)
+      try {
+        const { variables } = JSON.parse(result.text) as {
+          variables: Record<string, { type: string; value: unknown }>
+        }
+        const rows = Object.entries(variables).map(([token, { type, value }]) => {
+          if (Array.isArray(value)) {
+            const byTheme: Record<string, string> = {}
+            for (const entry of value as { theme: Record<string, string>; value: string }[]) {
+              const label = Object.values(entry.theme).join('/')
+              byTheme[label] = entry.value
+            }
+            return { token, type, light: byTheme['Light'] ?? '', dark: byTheme['Dark'] ?? '' }
+          }
+          const v = String(value)
+          return { token, type, light: fmt.dim(v), dark: fmt.dim(v) }
+        })
+        printTable(
+          [
+            { key: 'token', label: 'TOKEN' },
+            { key: 'type', label: 'TYPE' },
+            { key: 'light', label: 'LIGHT' },
+            { key: 'dark', label: 'DARK' },
+          ],
+          rows,
+        )
+      } catch {
+        print(result)
+      }
     },
 
     'set-vars': async ({ input, context }) => {
@@ -446,10 +513,22 @@ app.run({
     'replace-props': async ({ input, context }) => {
       const args: Record<string, unknown> = {
         parents: input.parents,
-        properties: input.properties,
+        properties: addVarPrefix(input.properties),
       }
       if (context.filePath) args.filePath = context.filePath
-      print(await callTool('replace_all_matching_properties', args))
+      const result = await callTool('replace_all_matching_properties', args)
+
+      // Bug workaround: replace_all_matching_properties escapes $ to \$ in the
+      // .pen JSON, producing "\\$--var" instead of the valid "$--var" variable
+      // reference format. Strip the spurious backslash and reload in Pencil.
+      if (context.filePath) {
+        const file = Bun.file(context.filePath)
+        const fixed = (await file.text()).replace(/\\{1,2}\$--/g, '$--')
+        await Bun.write(context.filePath, fixed)
+        await callTool('open_document', { filePathOrTemplate: context.filePath })
+      }
+
+      print(result)
     },
   },
 })

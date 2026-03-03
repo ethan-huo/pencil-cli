@@ -1,4 +1,6 @@
 #!/usr/bin/env bun
+import { cpSync, existsSync, mkdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { toStandardJsonSchema } from '@valibot/to-json-schema'
 import * as v from 'valibot'
 
@@ -10,6 +12,29 @@ const s = toStandardJsonSchema
 // ── Schema ────────────────────────────────────────────────────────────────────
 
 const schema = {
+  skills: group(
+    { description: 'Manage installable agent skills' },
+    {
+      add: c
+        .meta({
+          description: 'Install the pencil skill into an agent skills directory',
+          examples: [
+            'pencil skills add',
+            'pencil skills add --to /path/to/project',
+            'pencil skills add --name my-pencil',
+          ],
+        })
+        .input(
+          s(
+            v.object({
+              to: v.optional(v.string()),
+              name: v.optional(v.string(), 'pencil'),
+            }),
+          ),
+        ),
+    },
+  ),
+
   server: group(
     { description: 'Manage the Pencil MCP server process' },
     {
@@ -248,6 +273,24 @@ const app = cli(schema, {
 
 app.run({
   handlers: {
+    skills: {
+      add: ({ input }) => {
+        const targetBase = input.to ?? process.cwd()
+        const skillName = input.name ?? 'pencil'
+        const dest = join(targetBase, '.agents', 'skills', skillName)
+        const src = join(import.meta.dir, '..', 'skills', 'pencil')
+
+        if (!existsSync(src)) {
+          console.error(`Skill source not found: ${src}`)
+          process.exit(1)
+        }
+
+        mkdirSync(dest, { recursive: true })
+        cpSync(src, dest, { recursive: true })
+        console.log(`Installed skill → ${dest}`)
+      },
+    },
+
     server: {
       start: async ({ input }) => {
         const port = input.port

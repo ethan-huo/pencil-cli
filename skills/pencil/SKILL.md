@@ -24,13 +24,25 @@ pencil --schema=.<command>    # zoom in on one command
 
 ## Pre-flight: Canvas Discovery (MANDATORY)
 
+Run all three before touching anything. Never skip.
+
 ```bash
-pencil --file foo.pen get --reusable --depth 2   # discover reusable components
-pencil --file foo.pen get --depth 1              # top-level canvas structure
-pencil --file foo.pen screenshot --node <id>     # visual reference of existing screen
+# 1. Design tokens — know what variables are available BEFORE designing
+pencil --file foo.pen vars
+
+# 2. Reusable components — check if what you need already exists
+pencil --file foo.pen get --reusable --depth 2
+
+# 3. Top-level canvas structure — orient yourself
+pencil --file foo.pen get --depth 1
+
+# 4. Screenshot an existing related screen for visual reference
+pencil --file foo.pen screenshot --node <id>
 ```
 
-If a matching component exists → use `type: "ref", ref: "<componentId>"` instead of rebuilding it.
+**Always check `vars` first.** Every color, radius, and spacing value in the design must come from a token (`--background`, `--card`, `--primary`, etc.). Hardcoded hex values are wrong. `vars` shows you what tokens are available and their Light/Dark values.
+
+If a matching component already exists → reference it with `type: "ref", ref: "<componentId>"` instead of rebuilding.
 
 ## Preferred input patterns
 
@@ -41,7 +53,7 @@ Use `--eval` with a plain JS object literal — no JSON escaping, no shell quoti
 ```bash
 pencil --eval "
   await argc.handlers['replace-props']({
-    file: 'design/OnType-v2.pen',
+    file: 'design/MyApp.pen',
     parents: ['rootId'],
     properties: {
       fillColor: [{ from: '#18181B', to: '--card' }],
@@ -54,7 +66,7 @@ pencil --eval "
 ```bash
 pencil --eval "
   await argc.handlers['set-vars']({
-    file: 'design/OnType-v2.pen',
+    file: 'design/MyApp.pen',
     variables: { '--brand': { light: '#FF8400', dark: '#FF8400' } },
   })
 "
@@ -68,7 +80,7 @@ Use `--script` when the operations are already decided and don't require reading
 // scripts/tokenize-cards.ts
 // Run AFTER you have already discovered node IDs and mapped colors via individual pencil get calls.
 export async function main(argc) {
-  const file = 'design/OnType-v2.pen'
+  const file = 'design/MyApp.pen'
 
   // Apply token replacements across multiple known subtrees
   for (const parentId of ['abc12', 'def34', 'ghi56']) {

@@ -34,7 +34,13 @@ const schema = {
 
   state: c
     .meta({ description: 'Get current editor state', aliases: ['s'] })
-    .input(s(v.object({}))),
+    .input(
+      s(
+        v.object({
+          schema: v.optional(v.boolean(), false),
+        }),
+      ),
+    ),
 
   get: c
     .meta({
@@ -44,6 +50,8 @@ const schema = {
         'pencil get --node abc --node def',
         'pencil get --reusable --depth 2',
         'pencil --file foo.pen get --name "Comp/.*" --search 3',
+        'pencil get --type frame --search 2',
+        'pencil get --resolve-instances --resolve-variables',
         'pencil get --input \'{"patterns":[{"reusable":true}],"readDepth":3}\'',
       ],
     })
@@ -56,6 +64,26 @@ const schema = {
           search: v.optional(v.number()),
           reusable: v.optional(v.boolean()),
           name: v.optional(v.string()),
+          type: v.optional(
+            v.picklist([
+              'frame',
+              'group',
+              'rectangle',
+              'ellipse',
+              'line',
+              'polygon',
+              'path',
+              'text',
+              'connection',
+              'note',
+              'icon_font',
+              'image',
+              'ref',
+            ]),
+          ),
+          'resolve-instances': v.optional(v.boolean()),
+          'resolve-variables': v.optional(v.boolean()),
+          'path-geometry': v.optional(v.boolean()),
         }),
       ),
     ),
@@ -257,8 +285,8 @@ app.run({
       print(await callTool('open_document', { filePathOrTemplate: input.path }))
     },
 
-    state: async () => {
-      print(await callTool('get_editor_state', {}))
+    state: async ({ input }) => {
+      print(await callTool('get_editor_state', { include_schema: input.schema }))
     },
 
     get: async ({ input, context }) => {
@@ -268,11 +296,16 @@ app.run({
       if (input.parent) args.parentId = input.parent
       if (input.depth !== undefined) args.readDepth = input.depth
       if (input.search !== undefined) args.searchDepth = input.search
+      if (input['resolve-instances'] !== undefined) args.resolveInstances = input['resolve-instances']
+      if (input['resolve-variables'] !== undefined) args.resolveVariables = input['resolve-variables']
+      if (input['path-geometry'] !== undefined) args.includePathGeometry = input['path-geometry']
 
-      const patterns: Record<string, unknown>[] = []
-      if (input.reusable !== undefined) patterns.push({ reusable: input.reusable })
-      if (input.name) patterns.push({ name: input.name })
-      if (patterns.length) args.patterns = patterns
+      // Build patterns array from individual filters
+      const pattern: Record<string, unknown> = {}
+      if (input.reusable !== undefined) pattern.reusable = input.reusable
+      if (input.name) pattern.name = input.name
+      if (input.type) pattern.type = input.type
+      if (Object.keys(pattern).length) args.patterns = [pattern]
 
       print(await callTool('batch_get', args))
     },

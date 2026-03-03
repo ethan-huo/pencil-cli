@@ -60,20 +60,38 @@ pencil --eval "
 "
 ```
 
-### --script (best for multi-step or reusable logic)
+### --script (best for predetermined multi-step logic)
+
+Use `--script` when the operations are already decided and don't require reading output mid-way to make decisions. Typical cases: bulk updates, loops over known node IDs, applying a fixed set of changes.
 
 ```typescript
-// scripts/example.ts
+// scripts/tokenize-cards.ts
+// Run AFTER you have already discovered node IDs and mapped colors via individual pencil get calls.
 export async function main(argc) {
   const file = 'design/OnType-v2.pen'
-  await argc.handlers.get({ file, reusable: true, depth: 2 })
-  await argc.handlers.design({ file, ops: `panel=I("canvas", {type:"frame"})` })
+
+  // Apply token replacements across multiple known subtrees
+  for (const parentId of ['abc12', 'def34', 'ghi56']) {
+    await argc.handlers['replace-props']({
+      file,
+      parents: [parentId],
+      properties: {
+        fillColor: [
+          { from: '#18181B', to: '--card' },
+          { from: '#09090B', to: '--background' },
+        ],
+        textColor: [{ from: '#FAFAFA', to: '--foreground' }],
+      },
+    })
+  }
 }
 ```
 
 ```bash
-pencil --script ./scripts/example.ts
+pencil --script ./scripts/tokenize-cards.ts
 ```
+
+**Discovery first, script second** — always run individual `pencil get` calls interactively to understand the canvas before writing a script. Scripts don't pause for inspection.
 
 ### --input (only for simple flag overrides)
 

@@ -1,10 +1,14 @@
 // Formats Pencil batch_get JSON output as readable JSX code.
 // Deduplicates structurally identical subtrees into named const components.
+// Reusable components (ref nodes) are shown as compact references with a
+// footer hint — inspect them with a secondary `get` call.
 
 type PenNode = {
   type: string
   id?: string
   name?: string
+  ref?: string
+  reusable?: boolean
   x?: number
   y?: number
   content?: string
@@ -58,12 +62,31 @@ function prop(key: string, value: unknown): string {
 
 // ── Node → JSX ────────────────────────────────────────────────────────────────
 
-const SKIP = new Set(['type', 'id', 'name', 'x', 'y', 'children', 'content', 'iconFontFamily', 'iconFontName'])
+const SKIP = new Set(['type', 'id', 'name', 'x', 'y', 'children', 'content', 'iconFontFamily', 'iconFontName', 'ref', 'reusable'])
 
-function toJsx(node: PenNode, comps: Map<string, string>, depth: number, skipSubst = false): string {
+// In compact mode, only these props survive (besides id/name which are always shown)
+const COMPACT_KEEP = new Set(['content', 'icon', 'family', 'ref', 'reusable'])
+
+function toJsx(node: PenNode, comps: Map<string, string>, depth: number, refs: Set<string>, compact: boolean, skipSubst = false): string {
   const pad = '  '.repeat(depth)
   const h = hash(node)
   const tag = TAG[node.type] ?? node.type
+
+  // Ref nodes → compact one-liner, collect referenced ID for footer hint
+  if (node.type === 'ref' && node.ref) {
+    refs.add(node.ref)
+    const idProp = node.id ? ` id="${node.id}"` : ''
+    const nameProp = node.name ? ` name="${node.name}"` : ''
+    // Include non-default overrides (width, height, etc.) — skip in compact mode
+    const extras: string[] = []
+    if (!compact) {
+      for (const [k, v] of Object.entries(node)) {
+        if (!SKIP.has(k)) extras.push(prop(k, v))
+      }
+    }
+    const ep = extras.length ? ' ' + extras.join(' ') : ''
+    return `${pad}<Ref${idProp}${nameProp} ref="${node.ref}"${ep} />`
+  }
 
   // Substitute with component reference (unless rendering the declaration itself)
   if (!skipSubst && comps.has(h)) {
@@ -76,12 +99,15 @@ function toJsx(node: PenNode, comps: Map<string, string>, depth: number, skipSub
   const props: string[] = []
   if (node.id) props.push(prop('id', node.id))
   if (node.name) props.push(prop('name', node.name))
+  if (node.reusable) props.push('reusable')
   if (node.type === 'icon_font') {
     if (node.iconFontName) props.push(prop('icon', node.iconFontName))
     if (node.iconFontFamily) props.push(prop('family', node.iconFontFamily))
   }
   for (const [k, v] of Object.entries(node)) {
-    if (!SKIP.has(k)) props.push(prop(k, v))
+    if (SKIP.has(k)) continue
+    if (compact && !COMPACT_KEEP.has(k)) continue
+    props.push(prop(k, v))
   }
 
   const ps = props.length ? ' ' + props.join(' ') : ''
@@ -97,7 +123,7 @@ function toJsx(node: PenNode, comps: Map<string, string>, depth: number, skipSub
   // Depth-truncated
   if (node.children === '...') return `${pad}<${tag}${ps}>{/* … */}</${tag}>`
 
-  const lines = (node.children as PenNode[]).map(c => toJsx(c, comps, depth + 1))
+  const lines = (node.children as PenNode[]).map(c => toJsx(c, comps, depth + 1, refs, compact))
   return [`${pad}<${tag}${ps}>`, ...lines, `${pad}</${tag}>`].join('\n')
 }
 
@@ -111,7 +137,10 @@ function pascal(s: string): string {
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-export function formatNodes(jsonText: string): string {
+type FormatOptions = { compact?: boolean }
+
+export function formatNodes(jsonText: string, opts: FormatOptions = {}): string {
+  const compact = opts.compact ?? false
   let nodes: PenNode[]
   try {
     const parsed = JSON.parse(jsonText) as unknown
@@ -125,6 +154,8 @@ export function formatNodes(jsonText: string): string {
 
   function collect(n: PenNode) {
     if (!n.type) return
+    // Don't recurse into ref nodes — they're folded
+    if (n.type === 'ref') return
     if (Array.isArray(n.children)) for (const c of n.children as PenNode[]) collect(c)
     const h = hash(n)
     const e = seen.get(h)
@@ -153,12 +184,28 @@ export function formatNodes(jsonText: string): string {
     const node = seen.get(h)!.node
     // Strip id/name from declaration so it reads as the "template"
     const declNode = { ...node, id: undefined, name: undefined }
-    const body = toJsx(declNode, comps, 1, true)
+    const refs = new Set<string>()
+    const body = toJsx(declNode, comps, 1, refs, compact, true)
     decls.push(`${name} = (\n${body}\n)`)
   }
 
-  // 4. Render main tree (with substitution)
-  const tree = nodes.map(n => toJsx(n, comps, 0)).join('\n')
+  // 4. Render main tree (with substitution), collecting ref IDs
+  const refs = new Set<string>()
+  const tree = nodes.map(n => toJsx(n, comps, 0, refs, compact)).join('\n')
 
-  return decls.length ? [...decls, '', tree].join('\n') : tree
+  const parts: string[] = []
+  if (decls.length) parts.push(...decls, '')
+  parts.push(tree)
+
+  // 5. Footer hint for referenced components
+  if (refs.size > 0) {
+    const ids = [...refs].join(',')
+    parts.push(
+      '',
+      `// ${refs.size} reusable component(s) referenced.`,
+      `// Inspect: pencil get --node ${ids} --depth 2`,
+    )
+  }
+
+  return parts.join('\n')
 }

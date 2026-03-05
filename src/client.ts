@@ -292,8 +292,21 @@ async function extractOutput(data: unknown): Promise<ToolOutput> {
   return { text: textParts.join('\n'), screenshots }
 }
 
+const MAX_LINES = 1000
+
 export function print(output: ToolOutput): void {
-  if (output.text) console.log(output.text)
+  if (output.text) {
+    const lines = output.text.split('\n')
+    if (lines.length > MAX_LINES) {
+      console.log(lines.slice(0, MAX_LINES).join('\n'))
+      console.log(
+        `\n--- truncated (${lines.length} lines total) ---\n` +
+          'Output too large. Try narrowing: pencil get --node <id> --depth 1',
+      )
+    } else {
+      console.log(output.text)
+    }
+  }
   for (const p of output.screenshots) {
     console.log(`screenshot: ${p}`)
   }

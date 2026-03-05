@@ -85,6 +85,7 @@ const schema = {
           'resolve-instances': v.optional(v.boolean()),
           'resolve-variables': v.optional(v.boolean()),
           'path-geometry': v.optional(v.boolean()),
+          compact: v.optional(v.boolean()),
           raw: v.optional(v.boolean()),
         }),
       ),
@@ -328,7 +329,7 @@ app.run({
       if (input.raw) {
         print(result)
       } else {
-        print({ ...result, text: formatNodes(result.text) })
+        print({ ...result, text: formatNodes(result.text, { compact: input.compact }) })
       }
     },
 
@@ -350,10 +351,24 @@ app.run({
         process.exit(1)
       }
 
-      const args: Record<string, unknown> = { operations: addVarPrefixInDsl(ops.trim()) }
-      if (context.filePath) args.filePath = context.filePath
+      const opLines = addVarPrefixInDsl(ops.trim())
+        .split('\n')
+        .filter((l) => l.trim())
 
-      const result = await callTool('batch_design', args)
+      // Auto-batch: split into chunks of ≤20 ops to avoid MCP hangs
+      const BATCH_SIZE = 20
+      const batches: string[][] = []
+      for (let i = 0; i < opLines.length; i += BATCH_SIZE) {
+        batches.push(opLines.slice(i, i + BATCH_SIZE))
+      }
+
+      let lastResult: Awaited<ReturnType<typeof callTool>> | undefined
+      for (let i = 0; i < batches.length; i++) {
+        if (batches.length > 1) console.log(`Batch ${i + 1}/${batches.length} (${batches[i].length} ops)...`)
+        const args: Record<string, unknown> = { operations: batches[i].join('\n') }
+        if (context.filePath) args.filePath = context.filePath
+        lastResult = await callTool('batch_design', args)
+      }
 
       // Workaround: batch_design may escape $ to \$ in variable references.
       // Post-process the file to fix "\\$--var" → "$--var" if file is known.
@@ -367,7 +382,7 @@ app.run({
         }
       }
 
-      print(result)
+      if (lastResult) print(lastResult)
     },
 
     screenshot: async ({ input, context }) => {

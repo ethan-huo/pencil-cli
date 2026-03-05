@@ -55,10 +55,10 @@ pencil state
 pencil --file foo.pen vars
 
 # 3. What reusable components exist? Reuse before rebuilding.
-pencil --file foo.pen get --reusable --depth 2
+pencil --file foo.pen get --reusable --depth 2 --compact
 
 # 4. What's on the canvas? Orient yourself.
-pencil --file foo.pen get --depth 1
+pencil --file foo.pen get --depth 1 --compact
 
 # 5. Visual reference — screenshot an existing screen to match its style.
 pencil --file foo.pen screenshot --node <id>
@@ -70,6 +70,8 @@ pencil --file foo.pen screenshot --node <id>
 - Reusable components third — if a Button or Card already exists, reference it (`type: "ref", ref: "<id>"`) instead of rebuilding from scratch.
 - Top-level structure fourth — understand what screens/frames already exist and where they sit on the canvas.
 - Screenshot last — gives you a visual target to match when designing adjacent screens.
+
+**`--compact` for structure, full output for styling** — use `--compact` when exploring structure (pre-flight, navigation). It strips all style props (fill, padding, font, etc.) and shows only id, name, type, and tree hierarchy. Omit it when you need the actual design properties to match or modify styling.
 
 **Reading multiple nodes:** `--node` accepts comma-separated IDs:
 

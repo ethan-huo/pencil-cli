@@ -510,7 +510,13 @@ app.run({
       }
 
       // Generate U() ops and execute via batch_design
-      const opLines = matches.map((m) => `U("${m.id}", {${m.prop}: ${JSON.stringify(m.to)}})`)
+      const opLines = matches.map((m) => {
+        if (m.strokeMeta) {
+          const stroke = { align: m.strokeMeta.align, fill: m.to, thickness: m.strokeMeta.thickness }
+          return `U("${m.id}", {stroke: ${JSON.stringify(stroke)}})`
+        }
+        return `U("${m.id}", {${m.prop}: ${JSON.stringify(m.to)}})`
+      })
       const BATCH_SIZE = 20
       let done = 0
       for (let i = 0; i < opLines.length; i += BATCH_SIZE) {

@@ -22,7 +22,7 @@ export function addVarPrefixInDsl(ops: string): string {
 
 export type ReplaceRule = { from: string; to: string }
 export type NodeLike = { id?: string; type?: string; children?: NodeLike[] | '...'; [k: string]: unknown }
-export type PropMatch = { id: string; prop: string; to: string }
+export type PropMatch = { id: string; prop: string; to: string; strokeMeta?: { align: string; thickness: unknown } }
 
 function asColorStr(v: unknown): string | undefined {
   return typeof v === 'string' ? v.toLowerCase() : undefined
@@ -81,7 +81,12 @@ export function collectMatches(
       for (const rule of rules) {
         if (value === rule.from.toLowerCase()) {
           const dslProp = PROP_TO_DSL[propName] ?? propName
-          results.push({ id: node.id, prop: dslProp, to: rule.to })
+          const match: PropMatch = { id: node.id, prop: dslProp, to: rule.to }
+          if (propName === 'strokeColor') {
+            const s = node.stroke as Record<string, unknown> | undefined
+            if (s) match.strokeMeta = { align: (s.align as string) ?? 'inside', thickness: s.thickness ?? 1 }
+          }
+          results.push(match)
         }
       }
     }

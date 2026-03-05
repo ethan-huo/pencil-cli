@@ -19,8 +19,8 @@ pencil --schema=.<command>    # zoom in on one command
 1. **`--file` is global** — pass it before the subcommand: `pencil --file foo.pen get ...`
 2. **Never skip discovery** — always run the pre-flight sequence before designing.
 3. **Screenshots land in `$PWD/.pencil/screenshots/`** — use the `Read` tool on the printed path to view them.
-4. **Never inline large JSON** — use `--eval` with an object literal or `--script` for multi-step logic.
-5. **All colors must be tokens** — hardcoded hex values are wrong. Use `$--background`, `$--card`, `$--primary`, etc.
+4. **All colors must be tokens** — hardcoded hex values are wrong. Use `$--background`, `$--card`, `$--primary`, etc.
+5. **Output is JSX-serialized scene graph** — the CLI renders the JSON node tree as JSX for readability. It's still a scene graph underneath — node types, IDs, and properties map 1:1 to the .pen schema.
 
 ## Commands at a glance
 
@@ -71,6 +71,18 @@ pencil --file foo.pen screenshot --node <id>
 - Top-level structure fourth — understand what screens/frames already exist and where they sit on the canvas.
 - Screenshot last — gives you a visual target to match when designing adjacent screens.
 
+**Reading multiple nodes:** `--node` accepts comma-separated IDs:
+
+```bash
+pencil --file foo.pen get --node abc12,def34,ghi56 --depth 2
+```
+
+**Reusable components appear as compact refs** in output (e.g. `<Button ref="abc12" />`). To inspect a component's internal structure, do a secondary get:
+
+```bash
+pencil --file foo.pen get --node abc12,def34 --depth 2
+```
+
 ## Design cycle
 
 The workflow is iterative: **discover → design → verify → adjust**.
@@ -117,15 +129,21 @@ title=I(card, {type: "text", content: "Hello", fill: "$--foreground"})
 
 Max 25 ops per call. For larger designs, split by logical section.
 
+**Preferred: heredoc** (no escaping, no quoting issues):
+
 ```bash
-# Inline for small ops
-pencil --file foo.pen design "panel=I(parent, {type: 'frame', fill: '\$--card'})"
+pencil --file foo.pen design <<'EOF'
+card=I("rootFrame", {type: "frame", fill: "$--card", layout: "vertical", gap: 12})
+title=I(card, {type: "text", content: "Hello", fill: "$--foreground"})
+EOF
+```
 
-# From file for larger ops
-pencil --file foo.pen design @ops.txt
+Other input methods:
 
-# Piped
-cat ops.txt | pencil --file foo.pen design
+```bash
+pencil --file foo.pen design @ops.txt                          # from file
+pencil --file foo.pen design "x=I(root, {type: 'text'})"      # inline (single-line only)
+cat ops.txt | pencil --file foo.pen design                     # piped
 ```
 
 ### Design DSL gotchas
@@ -138,6 +156,7 @@ These are easy to get wrong. Read carefully.
 - **Copy + descendants, not Copy + Update** — C() gives children new IDs, so `U(copiedId+"/oldChildId")` will fail. Override descendants in the Copy itself: `C("srcId", parent, {descendants: {"childId": {content: "New"}}})`.
 - **Copy positioning** — use `positionDirection` and `positionPadding` on C() to auto-place the copy: `C("srcId", document, {positionDirection: "right", positionPadding: 100})`.
 - **No `image` node type** — images are fills on frame/rectangle nodes. First I() a frame, then G() to apply the image fill.
+- **Icon type is `icon_font`** — not `icon`. Use `{type: "icon_font", icon: "loader", family: "lucide"}`.
 - **Every I/C/R must have a binding** — even if unused. `foo=I(...)` not `I(...)`.
 - **On error, the entire batch rolls back** — fix and retry.
 
@@ -189,7 +208,39 @@ pencil --file foo.pen search-props --parent <id> --prop fillColor --prop textCol
 pencil --file foo.pen replace-props --input '{"parents":["<id>"],"properties":{"fillColor":[{"from":"#18181B","to":"--card"}]}}'
 ```
 
-Or via `--eval` for complex replacements:
+Or via `--eval` for complex replacements (see --eval section below).
+
+## Style guides
+
+When designing new screens and not working with an existing design system:
+
+```bash
+pencil style-tags                        # list available tags
+pencil style-guide --tag modern --tag dark  # get a style guide for inspiration
+```
+
+## --eval context
+
+`--eval` runs a JS expression with access to all CLI handlers. Use it for programmatic operations that need logic (loops, conditionals, complex payloads).
+
+**Available API** — do NOT probe with console.log, just call directly:
+
+```
+argc.handlers.get({file, node, depth, ...})
+argc.handlers.design({file, ops})
+argc.handlers.vars({file})
+argc.handlers['set-vars']({file, variables, replace})
+argc.handlers.screenshot({file, node})
+argc.handlers.layout({file, parent, depth, problems})
+argc.handlers.space({file, direction, width, height, node, padding})
+argc.handlers['search-props']({file, parent, prop})
+argc.handlers['replace-props']({file, parents, properties})
+argc.handlers['style-guide']({tag, name})
+```
+
+Parameters match CLI flags. `file` is the --file path.
+
+Example:
 
 ```bash
 pencil --eval "
@@ -204,22 +255,7 @@ pencil --eval "
 "
 ```
 
-## Style guides
-
-When designing new screens and not working with an existing design system:
-
-```bash
-pencil style-tags                        # list available tags
-pencil style-guide --tag modern --tag dark  # get a style guide for inspiration
-```
-
-## Input patterns
-
-### --eval (complex one-off calls)
-
-Best for nested payloads or calling handlers programmatically. See examples above.
-
-### --script (multi-step logic)
+## --script
 
 Use when operations are predetermined and don't need mid-way inspection.
 
@@ -228,10 +264,6 @@ pencil --script ./scripts/tokenize.ts
 ```
 
 **Discovery first, script second** — always run individual `pencil get` calls to understand the canvas before writing a script.
-
-### --input (simple flat payloads only)
-
-Only for small, flat objects. For anything nested, use `--eval`.
 
 ## Guidelines
 

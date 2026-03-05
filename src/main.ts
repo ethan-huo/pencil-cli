@@ -94,9 +94,9 @@ const schema = {
     .meta({
       description: 'Execute design operations on a .pen file',
       examples: [
-        'pencil design "panel=I(parent, {type: \'frame\', fill: \'$--card\'})"',
+        "pencil --file foo.pen design <<'EOF'\\npanel=I(root, {type: \"frame\"})\\nEOF",
         'pencil design @ops.txt',
-        'cat ops.txt | pencil design',
+        'pencil design "title=I(root, {type: \'text\', content: \'Hi\'})"',
         'pencil --script ./scripts/my-design.ts',
       ],
     })
@@ -309,7 +309,7 @@ app.run({
     get: async ({ input, context }) => {
       const args: Record<string, unknown> = {}
       if (context.filePath) args.filePath = context.filePath
-      if (input.node?.length) args.nodeIds = input.node
+      if (input.node?.length) args.nodeIds = input.node.flatMap((n) => n.split(','))
       if (input.parent) args.parentId = input.parent
       if (input.depth !== undefined) args.readDepth = input.depth
       if (input.search !== undefined) args.searchDepth = input.search

@@ -248,6 +248,84 @@ function addVarPrefixInDsl(ops: string): string {
   return ops.replace(/"(--[a-zA-Z0-9-]+)"/g, (_, name: string) => `"$${name}"`)
 }
 
+// ── Replace-props engine ─────────────────────────────────────────────────────
+
+// search-props uses abstract names (fillColor, textColor, strokeColor).
+// batch_get returns raw schema names (fill, stroke).
+// Map abstract → how to read + write on a node.
+const PROP_READERS: Record<string, (node: NodeLike) => string | undefined> = {
+  fillColor: (n) => (n.type !== 'text' ? asColorStr(n.fill) : undefined),
+  textColor: (n) => (n.type === 'text' ? asColorStr(n.fill) : undefined),
+  strokeColor: (n) => {
+    const s = n.stroke as Record<string, unknown> | undefined
+    if (!s) return undefined
+    // Simple solid stroke
+    if (typeof s.fill === 'string') return asColorStr(s.fill)
+    // Stroke with nested color object
+    const f = s.fill as Record<string, unknown> | undefined
+    if (f?.type === 'solid' && typeof f.color === 'string') return asColorStr(f.color)
+    return undefined
+  },
+  // Direct-name properties — schema name matches search-props name
+  cornerRadius: (n) => asStr(n.cornerRadius),
+  padding: (n) => asStr(n.padding),
+  gap: (n) => asStr(n.gap),
+  fontSize: (n) => asStr(n.fontSize),
+  fontFamily: (n) => asStr(n.fontFamily),
+  fontWeight: (n) => asStr(n.fontWeight),
+  strokeThickness: (n) => {
+    const s = n.stroke as Record<string, unknown> | undefined
+    return s ? asStr(s.thickness) : undefined
+  },
+}
+
+// DSL prop name to use in U() for each search-props property
+const PROP_TO_DSL: Record<string, string> = {
+  fillColor: 'fill',
+  textColor: 'fill',
+  strokeColor: 'stroke',
+  strokeThickness: 'strokeThickness',
+}
+
+function asColorStr(v: unknown): string | undefined {
+  return typeof v === 'string' ? v.toLowerCase() : undefined
+}
+function asStr(v: unknown): string | undefined {
+  return v !== undefined && v !== null ? String(v) : undefined
+}
+
+type ReplaceRule = { from: string; to: string }
+type NodeLike = { id?: string; type?: string; children?: NodeLike[] | '...'; [k: string]: unknown }
+
+function collectMatches(
+  nodes: NodeLike[],
+  properties: Record<string, ReplaceRule[]>,
+): { id: string; prop: string; to: string }[] {
+  const results: { id: string; prop: string; to: string }[] = []
+
+  function walk(node: NodeLike) {
+    if (!node.id) return
+    for (const [propName, rules] of Object.entries(properties)) {
+      const reader = PROP_READERS[propName]
+      if (!reader) continue
+      const value = reader(node)
+      if (value === undefined) continue
+      for (const rule of rules) {
+        if (value === rule.from.toLowerCase()) {
+          const dslProp = PROP_TO_DSL[propName] ?? propName
+          results.push({ id: node.id, prop: dslProp, to: rule.to })
+        }
+      }
+    }
+    if (Array.isArray(node.children)) {
+      for (const child of node.children) walk(child)
+    }
+  }
+
+  for (const node of nodes) walk(node)
+  return results
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 
 const app = cli(schema, {
@@ -498,24 +576,47 @@ app.run({
     },
 
     'replace-props': async ({ input, context }) => {
-      const args: Record<string, unknown> = {
-        parents: input.parents,
-        properties: addVarPrefix(input.properties),
-      }
-      if (context.filePath) args.filePath = context.filePath
-      const result = await callTool('replace_all_matching_properties', args)
-
-      // Bug workaround: replace_all_matching_properties escapes $ to \$ in the
-      // .pen JSON, producing "\\$--var" instead of the valid "$--var" variable
-      // reference format. Strip the spurious backslash and reload in Pencil.
-      if (context.filePath) {
-        const file = Bun.file(context.filePath)
-        const fixed = (await file.text()).replace(/\\{1,2}\$--/g, '$--')
-        await Bun.write(context.filePath, fixed)
-        await callTool('open_document', { filePathOrTemplate: context.filePath })
+      const filePath = context.filePath
+      if (!filePath) {
+        console.error('replace-props requires --file')
+        process.exit(1)
       }
 
-      await print(result)
+      const properties = addVarPrefix(input.properties) as Record<string, ReplaceRule[]>
+
+      // Deep-fetch nodes under each parent with resolved values
+      const allNodes: NodeLike[] = []
+      for (const parentId of input.parents) {
+        const result = await callTool('batch_get', {
+          filePath,
+          nodeIds: [parentId],
+          readDepth: 50,
+          resolveVariables: true,
+        })
+        const parsed = JSON.parse(result.text)
+        allNodes.push(...(Array.isArray(parsed) ? parsed : [parsed]))
+      }
+
+      // Find all property matches
+      const matches = collectMatches(allNodes, properties)
+      if (matches.length === 0) {
+        console.log('No matching properties found.')
+        return
+      }
+
+      // Generate U() ops and execute via batch_design
+      const opLines = matches.map((m) => `U("${m.id}", {${m.prop}: ${JSON.stringify(m.to)}})`)
+      const BATCH_SIZE = 20
+      let done = 0
+      for (let i = 0; i < opLines.length; i += BATCH_SIZE) {
+        const batch = opLines.slice(i, i + BATCH_SIZE)
+        if (opLines.length > BATCH_SIZE) console.log(`Batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(opLines.length / BATCH_SIZE)} (${batch.length} ops)...`)
+        await callTool('batch_design', { filePath, operations: batch.join('\n') })
+        done += batch.length
+      }
+
+      const nodeCount = new Set(matches.map((m) => m.id)).size
+      console.log(`Replaced ${done} properties across ${nodeCount} nodes.`)
     },
   },
 })

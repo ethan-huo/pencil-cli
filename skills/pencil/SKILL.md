@@ -212,16 +212,7 @@ pencil --file foo.pen search-props --parent <id> --prop fillColor --prop textCol
 pencil --file foo.pen replace-props --input '{"parents":["<id>"],"properties":{"fillColor":[{"from":"#18181B","to":"--card"}]}}'
 ```
 
-**Known issue:** `replace-props` may store token values as literal strings instead of proper variable references. If colors stop resolving after replace-props, use `design` with U() to fix:
-
-```bash
-pencil --file foo.pen design <<'EOF'
-u1=U("nodeId1", {fill: "$--card"})
-u2=U("nodeId2", {fill: "$--background"})
-EOF
-```
-
-The design DSL's U() always stores token references correctly.
+`replace-props` uses `batch_get` + `batch_design` internally, so token references (`$--var`) are always stored correctly.
 
 ## Style guides
 

@@ -44,5 +44,9 @@ export function formatLayout(jsonText: string): string {
     render(nodes[i], '', '')
   }
 
+  lines.push('')
+  lines.push('// Layout shows geometry only (id, size, position).')
+  lines.push('// Inspect node details: pencil get --node <id> --depth 1')
+
   return lines.join('\n')
 }

@@ -4,7 +4,7 @@ import { formatLayout } from './layout-formatter'
 describe('formatLayout', () => {
   test('renders single node with dimensions and position', () => {
     const json = JSON.stringify([{ id: 'f1', x: 10, y: 20, width: 300, height: 200 }])
-    expect(formatLayout(json)).toBe('f1 (300×200 @ 10,20)')
+    expect(formatLayout(json)).toContain('f1 (300×200 @ 10,20)')
   })
 
   test('renders nested children with tree connectors', () => {
@@ -107,6 +107,13 @@ describe('formatLayout', () => {
     expect(lines[0]).toBe('a (100×100 @ 0,0)')
     expect(lines[1]).toBe('')
     expect(lines[2]).toBe('b (100×100 @ 200,0)')
+  })
+
+  test('appends footer hint', () => {
+    const json = JSON.stringify([{ id: 'f1', x: 0, y: 0, width: 100, height: 50 }])
+    const out = formatLayout(json)
+    expect(out).toContain('// Layout shows geometry only')
+    expect(out).toContain('pencil get --node <id>')
   })
 
   test('returns raw text for invalid JSON', () => {

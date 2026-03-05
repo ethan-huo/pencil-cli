@@ -118,7 +118,7 @@ const schema = {
     .meta({
       description: 'Set variables in a .pen file',
       examples: [
-        'pencil --file foo.pen set-vars --input \'{"variables":{"--background":{"light":"#fff","dark":"#000"}},"replace":false}\'',
+        'pencil --file foo.pen set-vars --input \'{"variables":{"--brand":{"type":"color","value":[{"theme":{"Mode":"Light"},"value":"#FF8400"},{"theme":{"Mode":"Dark"},"value":"#FF8400"}]}},"replace":false}\'',
       ],
     })
     .input(
@@ -195,7 +195,7 @@ const schema = {
     .input(
       s(
         v.object({
-          parent: v.array(v.string()),
+          parent: v.string(),
           prop: v.array(
             v.picklist([
               'fillColor',
@@ -490,7 +490,7 @@ app.run({
 
     'search-props': async ({ input, context }) => {
       const args: Record<string, unknown> = {
-        parents: input.parent,
+        parents: input.parent.split(','),
         properties: input.prop,
       }
       if (context.filePath) args.filePath = context.filePath

@@ -197,7 +197,7 @@ When designing, always write `$--card` instead of `#18181B`. This ensures the de
 To add or update tokens:
 
 ```bash
-pencil --file foo.pen set-vars --input '{"variables":{"--brand":{"light":"#FF8400","dark":"#FF8400"}}}'
+pencil --file foo.pen set-vars --input '{"variables":{"--brand":{"type":"color","value":[{"theme":{"Mode":"Light"},"value":"#FF8400"},{"theme":{"Mode":"Dark"},"value":"#FF8400"}]}}}'
 ```
 
 ## Bulk property operations
@@ -212,7 +212,16 @@ pencil --file foo.pen search-props --parent <id> --prop fillColor --prop textCol
 pencil --file foo.pen replace-props --input '{"parents":["<id>"],"properties":{"fillColor":[{"from":"#18181B","to":"--card"}]}}'
 ```
 
-Or via `--eval` for complex replacements (see --eval section below).
+**Known issue:** `replace-props` may store token values as literal strings instead of proper variable references. If colors stop resolving after replace-props, use `design` with U() to fix:
+
+```bash
+pencil --file foo.pen design <<'EOF'
+u1=U("nodeId1", {fill: "$--card"})
+u2=U("nodeId2", {fill: "$--background"})
+EOF
+```
+
+The design DSL's U() always stores token references correctly.
 
 ## Style guides
 

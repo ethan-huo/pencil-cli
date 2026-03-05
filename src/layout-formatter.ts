@@ -44,9 +44,11 @@ export function formatLayout(jsonText: string): string {
     render(nodes[i], '', '')
   }
 
+  const hasProblems = jsonText.includes('"problems"')
   lines.push('')
-  lines.push('// Layout shows geometry only (id, size, position).')
-  lines.push('// Inspect node details: pencil get --node <id> --depth 1')
+  lines.push('─'.repeat(50))
+  lines.push('Geometry only (id, size, position). Inspect: pencil get --node <id>')
+  if (hasProblems) lines.push('⚠ = layout problem (clipped, overflow, etc.)')
 
   return lines.join('\n')
 }

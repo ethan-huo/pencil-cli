@@ -109,11 +109,20 @@ describe('formatLayout', () => {
     expect(lines[2]).toBe('b (100×100 @ 200,0)')
   })
 
-  test('appends footer hint', () => {
+  test('appends footer with separator', () => {
     const json = JSON.stringify([{ id: 'f1', x: 0, y: 0, width: 100, height: 50 }])
     const out = formatLayout(json)
-    expect(out).toContain('// Layout shows geometry only')
+    expect(out).toContain('──────')
     expect(out).toContain('pencil get --node <id>')
+    expect(out).not.toContain('⚠ =')
+  })
+
+  test('footer explains ⚠ marker when problems exist', () => {
+    const json = JSON.stringify([
+      { id: 'f1', x: 0, y: 0, width: 100, height: 50, problems: 'clipped' },
+    ])
+    const out = formatLayout(json)
+    expect(out).toContain('⚠ = layout problem')
   })
 
   test('returns raw text for invalid JSON', () => {

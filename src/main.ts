@@ -6,6 +6,7 @@ import { c, cli, group } from 'argc'
 import { fmt, printTable } from 'argc/terminal'
 import { callTool, print, serverStatus, startServer, stopServer } from './client'
 import { formatNodes } from './formatter'
+import { formatLayout } from './layout-formatter'
 import { addVarPrefix, addVarPrefixInDsl, collectMatches, type NodeLike, type ReplaceRule } from './replace'
 
 const s = toStandardJsonSchema
@@ -132,8 +133,10 @@ const schema = {
       s(
         v.object({
           parent: v.optional(v.string()),
+          node: v.optional(v.string()),
           depth: v.optional(v.number()),
           problems: v.optional(v.boolean(), false),
+          raw: v.optional(v.boolean()),
         }),
       ),
     ),
@@ -439,9 +442,15 @@ app.run({
       const args: Record<string, unknown> = {}
       if (context.filePath) args.filePath = context.filePath
       if (input.parent) args.parentId = input.parent
+      if (input.node) args.nodeId = input.node
       if (input.depth !== undefined) args.maxDepth = input.depth
       if (input.problems) args.problemsOnly = true
-      await print(await callTool('snapshot_layout', args))
+      const result = await callTool('snapshot_layout', args)
+      if (input.raw) {
+        await print(result)
+      } else {
+        await print({ ...result, text: formatLayout(result.text) })
+      }
     },
 
     space: async ({ input, context }) => {

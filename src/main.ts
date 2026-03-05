@@ -49,7 +49,7 @@ const schema = {
         .input(s(v.object({}))),
 
       status: c
-        .meta({ description: 'Show server status', aliases: ['ps'] })
+        .meta({ description: 'Show server status' })
         .input(s(v.object({}))),
     },
   ),
@@ -60,7 +60,7 @@ const schema = {
     .input(s(v.object({ path: v.string() }))),
 
   state: c
-    .meta({ description: 'Get current editor state', aliases: ['s'] })
+    .meta({ description: 'Get current editor state' })
     .input(
       s(
         v.object({
@@ -72,7 +72,6 @@ const schema = {
   get: c
     .meta({
       description: 'Retrieve nodes by ID or search patterns',
-      aliases: ['g'],
       examples: [
         'pencil get --node abc --node def',
         'pencil get --reusable --depth 2',
@@ -119,7 +118,6 @@ const schema = {
   design: c
     .meta({
       description: 'Execute design operations on a .pen file',
-      aliases: ['d'],
       examples: [
         'pencil design "panel=I(parent, {type: \'frame\', fill: \'$--card\'})"',
         'pencil design @ops.txt',
@@ -133,12 +131,11 @@ const schema = {
   screenshot: c
     .meta({
       description: 'Capture a node screenshot — saved to $PWD/.pencil/screenshots/',
-      aliases: ['ss'],
     })
     .input(s(v.object({ node: v.string() }))),
 
   vars: c
-    .meta({ description: 'Get variables and themes from a .pen file', aliases: ['v'] })
+    .meta({ description: 'Get variables and themes from a .pen file' })
     .input(s(v.object({}))),
 
   'set-vars': c
@@ -158,7 +155,7 @@ const schema = {
     ),
 
   layout: c
-    .meta({ description: 'Get layout snapshot', aliases: ['l'] })
+    .meta({ description: 'Get layout snapshot' })
     .input(
       s(
         v.object({

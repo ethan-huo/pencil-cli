@@ -205,12 +205,17 @@ pencil --file foo.pen set-vars --input '{"variables":{"--brand":{"type":"color",
 For tokenizing an existing design (replacing hardcoded hex → tokens):
 
 ```bash
-# 1. Audit what values exist
+# 1. Quick audit — see unique values per property (includes already-tokenized colors as resolved hex)
 pencil --file foo.pen search-props --parent <id> --prop fillColor --prop textColor
 
-# 2. Replace them
+# 2. Deep audit — find ONLY hardcoded hex values (excludes $--var references)
+pencil --file foo.pen get --node <id> --depth 50 --raw | jq '[.. | strings | select(test("^#[0-9A-Fa-f]{3,8}$"))] | unique'
+
+# 3. Replace them
 pencil --file foo.pen replace-props --input '{"parents":["<id>"],"properties":{"fillColor":[{"from":"#18181B","to":"--card"}]}}'
 ```
+
+> **Tip:** `search-props` resolves all values to hex — you can't tell which are already tokenized. Use step 2 (`--raw | jq`) to see only the remaining hardcoded colors that still need replacement. Pipe `--raw` through `jq` for any custom filtering on the full scene graph JSON.
 
 `replace-props` uses `batch_get` + `batch_design` internally, so token references (`$--var`) are always stored correctly.
 

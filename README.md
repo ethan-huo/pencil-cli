@@ -26,44 +26,28 @@ The raw MCP server works, but it's awkward to drive from agents or the terminal:
 
 ### `get` — reads canvas nodes as JSX
 
-Instead of raw JSON, `pencil get` outputs a readable JSX snapshot with structural deduplication. Repeated subtrees are automatically extracted as named `const` components.
+Instead of raw JSON, `pencil get` outputs a readable JSX snapshot. Structurally identical subtrees are collapsed in-place — no top-level declarations, just a compact shorthand in the tree with a footer hint.
 
 ```bash
 pencil --file foo.pen get --parent <nodeId> --depth 6
 ```
 
 ```jsx
-PlanTitle = (
-  <Text fill="--foreground" fontFamily="Inter" fontSize={13} fontWeight="600">Trial</Text>
-)
-UsageLabel = (
-  <Text fill="--muted-foreground" fontFamily="Inter" fontSize={11} fontWeight="normal">3 / 7 days left</Text>
-)
-TrialFill = (
-  <Frame cornerRadius={2} fill="--muted-foreground" height="fill_container" width={53} />
-)
-ProgressBar = (
-  <Frame cornerRadius={2} fill="--border" height={4} width="fill_container">
-    <TrialFill id="nvTHX" />
-  </Frame>
-)
-UsageRow = (
-  <Frame gap={4} layout="vertical" width="fill_container">
-    <UsageLabel id="PY42K" />
-    <ProgressBar id="NIvlq" />
-  </Frame>
-)
-
 <Frame id="eNsZZ" name="freeRef" cornerRadius={10} fill="--muted" gap={10} layout="vertical" padding={12} width={147}>
-  <PlanTitle id="MtHmF" />
-  <UsageRow id="qj29g" />
+  <Text id="MtHmF" name="PlanTitle" fill="--foreground" fontFamily="Inter" fontSize={13} fontWeight="600">Trial</Text>
+  <Frame id="qj29g" name="UsageRow" gap={4} layout="vertical" width="fill_container">
+    <Text id="PY42K" fill="--muted-foreground" fontFamily="Inter" fontSize={11}>3 / 7 days left</Text>
+    <Frame id="NIvlq" cornerRadius={2} fill="--border" height={4} width="fill_container">
+      <Frame id="nvTHX" cornerRadius={2} fill="--muted-foreground" height="fill_container" width={53} />
+    </Frame>
+  </Frame>
   <Frame id="UzCha" name="Upgrade Button" alignItems="center" cornerRadius={6} fill="--primary" height={32} justifyContent="center" width="fill_container">
-    <Text id="ndpmq" name="Upgrade Text" fill="--primary-foreground" fontFamily="Inter" fontSize={12} fontWeight="600">Sign In</Text>
+    <Text id="ndpmq" fill="--primary-foreground" fontFamily="Inter" fontSize={12} fontWeight="600">Sign In</Text>
   </Frame>
 </Frame>
 ```
 
-Pass `--raw` to get the original JSON instead.
+Use `--compact` to strip style props and focus on structure, or `--raw` for the original JSON.
 
 ---
 
@@ -120,8 +104,8 @@ pencil --file foo.pen screenshot --node <id>
 pencil --file foo.pen layout --problems
 
 pencil --file foo.pen design "panel=I('root', {type:'frame', fill:'--card'})"
-pencil --file foo.pen replace-props --eval ...
-pencil --file foo.pen set-vars --eval ...
+pencil --file foo.pen replace-props --input '{"parents":["<id>"],"properties":{"fillColor":[{"from":"#FF0000","to":"--primary"}]}}'
+pencil --file foo.pen set-vars --input '{"variables":{"--brand":{"type":"color","value":[...]}}}'
 
 pencil server status
 pencil server start
@@ -145,16 +129,11 @@ pencil --file foo.pen get --depth 1
 # 4. Screenshot a reference screen
 pencil --file foo.pen screenshot --node <id>
 
-# 5. Design — use --eval to avoid JSON escaping
-pencil --eval "
-  await argc.handlers.design({
-    file: 'foo.pen',
-    ops: \`
-      card=I('root', { type: 'frame', fill: '--card', cornerRadius: 12, padding: 24 })
-      title=I(card, { type: 'text', content: 'Hello', fill: '--foreground' })
-    \`
-  })
-"
+# 5. Design — use heredoc for zero-escaping multi-line ops
+pencil --file foo.pen design <<'EOF'
+card=I("root", {type: "frame", fill: "--card", cornerRadius: 12, padding: 24})
+title=I(card, {type: "text", content: "Hello", fill: "--foreground"})
+EOF
 ```
 
 Install as an agent skill:

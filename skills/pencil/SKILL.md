@@ -21,15 +21,14 @@ pencil --schema=.<command>    # zoom in on one command
 3. **Screenshots land in `$PWD/.pencil/screenshots/`** — use the `Read` tool on the printed path to view them.
 4. **All colors must be tokens** — hardcoded hex values are wrong. Use `$--background`, `$--card`, `$--primary`, etc.
 5. **Output is JSX-serialized scene graph** — the CLI renders the JSON node tree as JSX for readability. It's still a scene graph underneath — node types, IDs, and properties map 1:1 to the .pen schema.
-6. **Never `open` a file that is already open in Pencil** — this creates a broken empty window that hijacks the MCP connection. Always use `--file` to target files directly. The `open` command is only for files NOT already open in Pencil.
-7. **`state` only shows one file** — the active editor. When working with multiple .pen files, always pass `--file` explicitly. Do not rely on `state` to discover all open files — ask the user which files are involved.
+6. **No `open` command** — the CLI does not have an `open` command. All commands accept `--file` to target a specific .pen file directly. If you need to open a new file in Pencil, use the system command `open <path.pen>`.
+7. **Multi-file workflow** — when working with multiple .pen files, always pass `--file` explicitly. `state` accepts `--file` too and will auto-switch the active editor. Ask the user which files are involved rather than guessing from `state` output alone.
 
 ## Commands at a glance
 
 | Command | Purpose |
 |---------|---------|
 | `state` | Current editor state — active file, selection, top-level nodes |
-| `open <path>` | Open a .pen file (or create new) |
 | `get` | Read nodes by ID or search patterns (type, name, reusable) |
 | `design` | Execute insert/copy/update/replace/move/delete/image ops |
 | `screenshot --node <id>` | Capture a node as image for visual verification |
@@ -51,9 +50,8 @@ Run these before any design task. The goal is to build a mental model of the can
 
 ```bash
 # 1. What file is open? What's selected?
-pencil state
-# ⚠ state only shows the ACTIVE file. If the task involves multiple .pen files,
-# ask the user for all file paths — do NOT call `open` on files already open in Pencil.
+pencil state                          # shows active editor
+pencil --file other.pen state         # auto-switches to a different file
 
 # 2. What tokens exist? Every color/radius/spacing MUST come from here.
 pencil --file foo.pen vars

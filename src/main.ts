@@ -30,11 +30,6 @@ const schema = {
     },
   ),
 
-  open: c
-    .meta({ description: 'Open a .pen file or create a new one' })
-    .args('path')
-    .input(s(v.object({ path: v.string() }))),
-
   state: c
     .meta({ description: 'Get current editor state' })
     .input(
@@ -285,11 +280,13 @@ app.run({
       },
     },
 
-    open: async ({ input }) => {
-      await print(await callTool('open_document', { filePathOrTemplate: input.path }))
-    },
-
-    state: async ({ input }) => {
+    state: async ({ input, context }) => {
+      // get_editor_state doesn't accept filePath — switch active editor first
+      if (context.filePath) {
+        const proc = Bun.spawn(['open', context.filePath], { stdout: 'ignore', stderr: 'ignore' })
+        await proc.exited
+        await new Promise((r) => setTimeout(r, 800))
+      }
       await print(await callTool('get_editor_state', { include_schema: input.schema }))
     },
 

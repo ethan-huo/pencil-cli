@@ -21,6 +21,8 @@ pencil --schema=.<command>    # zoom in on one command
 3. **Screenshots land in `$PWD/.pencil/screenshots/`** — use the `Read` tool on the printed path to view them.
 4. **All colors must be tokens** — hardcoded hex values are wrong. Use `$--background`, `$--card`, `$--primary`, etc.
 5. **Output is JSX-serialized scene graph** — the CLI renders the JSON node tree as JSX for readability. It's still a scene graph underneath — node types, IDs, and properties map 1:1 to the .pen schema.
+6. **Never `open` a file that is already open in Pencil** — this creates a broken empty window that hijacks the MCP connection. Always use `--file` to target files directly. The `open` command is only for files NOT already open in Pencil.
+7. **`state` only shows one file** — the active editor. When working with multiple .pen files, always pass `--file` explicitly. Do not rely on `state` to discover all open files — ask the user which files are involved.
 
 ## Commands at a glance
 
@@ -50,6 +52,8 @@ Run these before any design task. The goal is to build a mental model of the can
 ```bash
 # 1. What file is open? What's selected?
 pencil state
+# ⚠ state only shows the ACTIVE file. If the task involves multiple .pen files,
+# ask the user for all file paths — do NOT call `open` on files already open in Pencil.
 
 # 2. What tokens exist? Every color/radius/spacing MUST come from here.
 pencil --file foo.pen vars

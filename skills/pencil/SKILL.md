@@ -79,7 +79,9 @@ pencil --file foo.pen screenshot --node <id>
 pencil --file foo.pen get --node abc12,def34,ghi56 --depth 2
 ```
 
-**Reusable components appear as compact refs** in output (e.g. `<Button ref="abc12" />`). To inspect a component's internal structure, do a secondary get:
+**Only nodes with `reusable` attribute can be used as `ref` targets.** The output may also show PascalCase tags like `<NavItemsSection />` — these are display-only shorthands for repeated patterns, NOT reusable components. The footer distinguishes the two.
+
+**Reusable components appear as compact refs** in output (e.g. `<Ref ref="abc12" />`). To inspect a component's internal structure, do a secondary get:
 
 ```bash
 pencil --file foo.pen get --node abc12,def34 --depth 2

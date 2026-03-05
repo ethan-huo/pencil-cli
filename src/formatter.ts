@@ -1,7 +1,6 @@
 // Formats Pencil batch_get JSON output as readable JSX code.
-// Deduplicates structurally identical subtrees into named const components.
-// Reusable components (ref nodes) are shown as compact references with a
-// footer hint — inspect them with a secondary `get` call.
+// Structurally identical subtrees are deduplicated into named references.
+// Ref nodes (component instances) are shown as compact one-liners.
 
 type PenNode = {
   type: string
@@ -36,7 +35,6 @@ const TAG: Record<string, string> = {
 
 // ── Hash ──────────────────────────────────────────────────────────────────────
 
-// Structural hash excluding id, x, y, name (those are instance-level metadata).
 function hash(node: PenNode): string {
   const { id: _id, x: _x, y: _y, name: _name, children, ...rest } = node
   const childHash = !children
@@ -51,7 +49,6 @@ function hash(node: PenNode): string {
 
 function prop(key: string, value: unknown): string {
   if (typeof value === 'string') {
-    // Strip the $ sigil — --var is the clean CSS-variable convention
     const v = value.startsWith('$') ? value.slice(1) : value
     return `${key}="${v}"`
   }
@@ -64,12 +61,10 @@ function prop(key: string, value: unknown): string {
 
 const SKIP = new Set(['type', 'id', 'name', 'x', 'y', 'children', 'content', 'iconFontFamily', 'iconFontName', 'ref', 'reusable'])
 
-// In compact mode, only these props survive (besides id/name which are always shown)
 const COMPACT_KEEP = new Set(['content', 'icon', 'family', 'ref', 'reusable'])
 
-function toJsx(node: PenNode, comps: Map<string, string>, depth: number, refs: Set<string>, compact: boolean, skipSubst = false): string {
+function toJsx(node: PenNode, comps: Map<string, string>, depth: number, refs: Set<string>, compact: boolean): string {
   const pad = '  '.repeat(depth)
-  const h = hash(node)
   const tag = TAG[node.type] ?? node.type
 
   // Ref nodes → compact one-liner, collect referenced ID for footer hint
@@ -77,7 +72,6 @@ function toJsx(node: PenNode, comps: Map<string, string>, depth: number, refs: S
     refs.add(node.ref)
     const idProp = node.id ? ` id="${node.id}"` : ''
     const nameProp = node.name ? ` name="${node.name}"` : ''
-    // Include non-default overrides (width, height, etc.) — skip in compact mode
     const extras: string[] = []
     if (!compact) {
       for (const [k, v] of Object.entries(node)) {
@@ -88,8 +82,9 @@ function toJsx(node: PenNode, comps: Map<string, string>, depth: number, refs: S
     return `${pad}<Ref${idProp}${nameProp} ref="${node.ref}"${ep} />`
   }
 
-  // Substitute with component reference (unless rendering the declaration itself)
-  if (!skipSubst && comps.has(h)) {
+  // Structural dedup — substitute repeated subtree with compact tag
+  const h = hash(node)
+  if (comps.has(h)) {
     const cname = comps.get(h)!
     const idProp = node.id ? ` id="${node.id}"` : ''
     return `${pad}<${cname}${idProp} />`
@@ -149,13 +144,11 @@ export function formatNodes(jsonText: string, opts: FormatOptions = {}): string 
     return jsonText
   }
 
-  // 1. Collect structural hashes from every node in the tree
+  // 1. Collect structural hashes — only count non-ref nodes
   const seen = new Map<string, { count: number; node: PenNode }>()
 
   function collect(n: PenNode) {
-    if (!n.type) return
-    // Don't recurse into ref nodes — they're folded
-    if (n.type === 'ref') return
+    if (!n.type || n.type === 'ref') return
     if (Array.isArray(n.children)) for (const c of n.children as PenNode[]) collect(c)
     const h = hash(n)
     const e = seen.get(h)
@@ -164,9 +157,10 @@ export function formatNodes(jsonText: string, opts: FormatOptions = {}): string 
   }
   for (const n of nodes) collect(n)
 
-  // 2. Build component map: hash → name (only for duplicates)
+  // 2. Build dedup map: hash → PascalCase name (only for duplicates)
   const comps = new Map<string, string>()
   const taken = new Set<string>()
+  const dedupNames: string[] = []
 
   for (const [h, { count, node }] of seen) {
     if (count < 2) continue
@@ -176,34 +170,31 @@ export function formatNodes(jsonText: string, opts: FormatOptions = {}): string 
     while (taken.has(name)) name = `${base}${i++}`
     taken.add(name)
     comps.set(h, name)
+    dedupNames.push(name)
   }
 
-  // 3. Render component declarations (no substitution inside declarations)
-  const decls: string[] = []
-  for (const [h, name] of comps) {
-    const node = seen.get(h)!.node
-    // Strip id/name from declaration so it reads as the "template"
-    const declNode = { ...node, id: undefined, name: undefined }
-    const refs = new Set<string>()
-    const body = toJsx(declNode, comps, 1, refs, compact, true)
-    decls.push(`${name} = (\n${body}\n)`)
-  }
-
-  // 4. Render main tree (with substitution), collecting ref IDs
+  // 3. Render tree (deduped subtrees replaced with compact tags)
   const refs = new Set<string>()
   const tree = nodes.map(n => toJsx(n, comps, 0, refs, compact)).join('\n')
 
-  const parts: string[] = []
-  if (decls.length) parts.push(...decls, '')
-  parts.push(tree)
+  const parts: string[] = [tree]
 
-  // 5. Footer hint for referenced components
+  // 4. Footer hints
   if (refs.size > 0) {
     const ids = [...refs].join(',')
     parts.push(
       '',
-      `// ${refs.size} reusable component(s) referenced.`,
+      `// ${refs.size} reusable component(s) referenced — only nodes with \`reusable\` can be ref'd.`,
       `// Inspect: pencil get --node ${ids} --depth 2`,
+    )
+  }
+
+  if (dedupNames.length > 0) {
+    parts.push(
+      '',
+      `// ${dedupNames.length} repeated pattern(s) collapsed: ${dedupNames.join(', ')}`,
+      `// These are display-only shorthands, NOT reusable components.`,
+      `// Inspect originals: pencil get --node <id> --depth 2`,
     )
   }
 

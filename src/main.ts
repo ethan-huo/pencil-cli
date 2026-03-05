@@ -59,7 +59,7 @@ const schema = {
     .input(
       s(
         v.object({
-          node: v.optional(v.array(v.string())),
+          node: v.optional(v.string()),
           parent: v.optional(v.string()),
           depth: v.optional(v.number()),
           search: v.optional(v.number()),
@@ -310,7 +310,7 @@ app.run({
     get: async ({ input, context }) => {
       const args: Record<string, unknown> = {}
       if (context.filePath) args.filePath = context.filePath
-      if (input.node?.length) args.nodeIds = input.node.flatMap((n) => n.split(','))
+      if (input.node) args.nodeIds = input.node.split(',')
       if (input.parent) args.parentId = input.parent
       if (input.depth !== undefined) args.readDepth = input.depth
       if (input.search !== undefined) args.searchDepth = input.search

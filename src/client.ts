@@ -216,6 +216,7 @@ type ToolOutput = {
 export async function callTool(
   name: string,
   args: Record<string, unknown>,
+  opts?: { screenshotName?: string },
 ): Promise<ToolOutput> {
   const session = await ensureSession()
 
@@ -249,10 +250,10 @@ export async function callTool(
     ? await parseSseStream(resp)
     : await resp.json()
 
-  return extractOutput(data)
+  return extractOutput(data, opts?.screenshotName)
 }
 
-async function extractOutput(data: unknown): Promise<ToolOutput> {
+async function extractOutput(data: unknown, screenshotName?: string): Promise<ToolOutput> {
   const d = data as Record<string, unknown>
   const result = (d.result ?? d) as Record<string, unknown>
 
@@ -283,8 +284,10 @@ async function extractOutput(data: unknown): Promise<ToolOutput> {
     } else if (item.type === 'image' && item.data) {
       const screenshotDir = join(process.cwd(), '.pencil', 'screenshots')
       mkdirSync(screenshotDir, { recursive: true })
-      const filePath = join(screenshotDir, `screenshot-${Date.now()}.png`)
-      await Bun.write(filePath, Buffer.from(item.data, 'base64'))
+      const fname = screenshotName ?? `screenshot-${Date.now()}`
+      const filePath = join(screenshotDir, `${fname}.png`)
+      const buf = Buffer.from(item.data, 'base64')
+      await Bun.write(filePath, buf)
       screenshots.push(filePath)
     }
   }
@@ -294,7 +297,9 @@ async function extractOutput(data: unknown): Promise<ToolOutput> {
 
 const MAX_LINES = 1000
 
-export function print(output: ToolOutput): void {
+const SMALL_IMAGE_THRESHOLD = 200
+
+export async function print(output: ToolOutput): Promise<void> {
   if (output.text) {
     const lines = output.text.split('\n')
     if (lines.length > MAX_LINES) {
@@ -308,6 +313,29 @@ export function print(output: ToolOutput): void {
     }
   }
   for (const p of output.screenshots) {
-    console.log(`screenshot: ${p}`)
+    const size = await imageSize(p)
+    if (size) {
+      console.log(`screenshot: ${p} (${size.w}x${size.h})`)
+      if (size.w < SMALL_IMAGE_THRESHOLD || size.h < SMALL_IMAGE_THRESHOLD) {
+        console.log(
+          `hint: Image is small and may be hard to read. Scale up with:\n` +
+            `  sips --resampleWidth ${size.w * 3} "${p}" --out "${p.replace('.png', '-3x.png')}"`,
+        )
+      }
+    } else {
+      console.log(`screenshot: ${p}`)
+    }
   }
+}
+
+async function imageSize(path: string): Promise<{ w: number; h: number } | null> {
+  try {
+    const buf = new Uint8Array(await Bun.file(path).arrayBuffer())
+    // PNG header: width at byte 16 (4 bytes BE), height at byte 20 (4 bytes BE)
+    if (buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {
+      const view = new DataView(buf.buffer)
+      return { w: view.getUint32(16), h: view.getUint32(20) }
+    }
+  } catch {}
+  return null
 }

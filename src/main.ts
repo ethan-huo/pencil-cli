@@ -300,11 +300,11 @@ app.run({
     },
 
     open: async ({ input }) => {
-      print(await callTool('open_document', { filePathOrTemplate: input.path }))
+      await print(await callTool('open_document', { filePathOrTemplate: input.path }))
     },
 
     state: async ({ input }) => {
-      print(await callTool('get_editor_state', { include_schema: input.schema }))
+      await print(await callTool('get_editor_state', { include_schema: input.schema }))
     },
 
     get: async ({ input, context }) => {
@@ -327,9 +327,9 @@ app.run({
 
       const result = await callTool('batch_get', args)
       if (input.raw) {
-        print(result)
+        await print(result)
       } else {
-        print({ ...result, text: formatNodes(result.text, { compact: input.compact }) })
+        await print({ ...result, text: formatNodes(result.text, { compact: input.compact }) })
       }
     },
 
@@ -382,13 +382,31 @@ app.run({
         }
       }
 
-      if (lastResult) print(lastResult)
+      if (lastResult) await print(lastResult)
     },
 
     screenshot: async ({ input, context }) => {
       const args: Record<string, unknown> = { nodeId: input.node }
       if (context.filePath) args.filePath = context.filePath
-      print(await callTool('get_screenshot', args))
+
+      // Fetch node name for semantic filename
+      const getArgs: Record<string, unknown> = { nodeIds: [input.node], readDepth: 0 }
+      if (context.filePath) getArgs.filePath = context.filePath
+      let screenshotName: string | undefined
+      try {
+        const info = await callTool('batch_get', getArgs)
+        const nodes = JSON.parse(info.text) as { name?: string; id?: string }[]
+        if (nodes[0]?.name) {
+          const kebab = nodes[0].name
+            .replace(/[^a-zA-Z0-9]+/g, '-')
+            .replace(/^-|-$/g, '')
+            .toLowerCase()
+          screenshotName = `${kebab}-${input.node}`
+        }
+      } catch {}
+      screenshotName ??= input.node
+
+      await print(await callTool('get_screenshot', args, { screenshotName }))
     },
 
     vars: async ({ context }) => {
@@ -421,7 +439,7 @@ app.run({
           rows,
         )
       } catch {
-        print(result)
+        await print(result)
       }
     },
 
@@ -431,7 +449,7 @@ app.run({
         replace: input.replace,
       }
       if (context.filePath) args.filePath = context.filePath
-      print(await callTool('set_variables', args))
+      await print(await callTool('set_variables', args))
     },
 
     layout: async ({ input, context }) => {
@@ -440,7 +458,7 @@ app.run({
       if (input.parent) args.parentId = input.parent
       if (input.depth !== undefined) args.maxDepth = input.depth
       if (input.problems) args.problemsOnly = true
-      print(await callTool('snapshot_layout', args))
+      await print(await callTool('snapshot_layout', args))
     },
 
     space: async ({ input, context }) => {
@@ -452,22 +470,22 @@ app.run({
       }
       if (context.filePath) args.filePath = context.filePath
       if (input.node) args.nodeId = input.node
-      print(await callTool('find_empty_space_on_canvas', args))
+      await print(await callTool('find_empty_space_on_canvas', args))
     },
 
     guidelines: async ({ input }) => {
-      print(await callTool('get_guidelines', { topic: input.topic }))
+      await print(await callTool('get_guidelines', { topic: input.topic }))
     },
 
     'style-tags': async () => {
-      print(await callTool('get_style_guide_tags', {}))
+      await print(await callTool('get_style_guide_tags', {}))
     },
 
     'style-guide': async ({ input }) => {
       const args: Record<string, unknown> = {}
       if (input.tag?.length) args.tags = input.tag
       if (input.name) args.name = input.name
-      print(await callTool('get_style_guide', args))
+      await print(await callTool('get_style_guide', args))
     },
 
     'search-props': async ({ input, context }) => {
@@ -476,7 +494,7 @@ app.run({
         properties: input.prop,
       }
       if (context.filePath) args.filePath = context.filePath
-      print(await callTool('search_all_unique_properties', args))
+      await print(await callTool('search_all_unique_properties', args))
     },
 
     'replace-props': async ({ input, context }) => {
@@ -497,7 +515,7 @@ app.run({
         await callTool('open_document', { filePathOrTemplate: context.filePath })
       }
 
-      print(result)
+      await print(result)
     },
   },
 })

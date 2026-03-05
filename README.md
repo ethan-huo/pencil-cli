@@ -160,8 +160,7 @@ pencil --eval "
 Install as an agent skill:
 
 ```bash
-pencil skills add                          # installs into .agents/skills/pencil/
-pencil skills add --to /path/to/project
+bunx skills add ethan-huo/pencil-cli
 ```
 
 ---

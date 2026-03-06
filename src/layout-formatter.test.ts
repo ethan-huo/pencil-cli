@@ -2,12 +2,12 @@ import { describe, expect, test } from 'bun:test'
 import { formatLayout } from './layout-formatter'
 
 describe('formatLayout', () => {
-  test('renders single node with dimensions and position', () => {
+  test('renders node as: id WxH X,Y', () => {
     const json = JSON.stringify([{ id: 'f1', x: 10, y: 20, width: 300, height: 200 }])
-    expect(formatLayout(json)).toContain('f1 (300×200 @ 10,20)')
+    expect(formatLayout(json)).toContain('f1 300x200 10,20')
   })
 
-  test('renders nested children with tree connectors', () => {
+  test('indents children with 2 spaces', () => {
     const json = JSON.stringify([
       {
         id: 'root',
@@ -22,57 +22,12 @@ describe('formatLayout', () => {
       },
     ])
     const lines = formatLayout(json).split('\n')
-    expect(lines[0]).toBe('root (800×600 @ 0,0)')
-    expect(lines[1]).toBe('├─ a (400×50 @ 0,0)')
-    expect(lines[2]).toBe('└─ b (400×50 @ 0,50)')
+    expect(lines[0]).toBe('root 800x600 0,0')
+    expect(lines[1]).toBe('  a 400x50 0,0')
+    expect(lines[2]).toBe('  b 400x50 0,50')
   })
 
-  test('renders problems with warning marker', () => {
-    const json = JSON.stringify([
-      { id: 'f1', x: 0, y: 0, width: 100, height: 50, problems: 'partially clipped' },
-    ])
-    expect(formatLayout(json)).toContain('⚠ partially clipped')
-  })
-
-  test('renders truncated children as ellipsis', () => {
-    const json = JSON.stringify([
-      {
-        id: 'root',
-        x: 0,
-        y: 0,
-        width: 100,
-        height: 100,
-        children: [
-          { id: 'a', x: 0, y: 0, width: 50, height: 50, children: '...' },
-        ],
-      },
-    ])
-    const out = formatLayout(json)
-    expect(out).toContain('└─ …')
-  })
-
-  test('truncated children do not leak parent connector', () => {
-    const json = JSON.stringify([
-      {
-        id: 'root',
-        x: 0,
-        y: 0,
-        width: 100,
-        height: 100,
-        children: [
-          { id: 'a', x: 0, y: 0, width: 50, height: 50, children: '...' },
-          { id: 'b', x: 50, y: 0, width: 50, height: 50 },
-        ],
-      },
-    ])
-    const lines = formatLayout(json).split('\n')
-    // 'a' is not last child → uses ├─, its truncated child should use │  └─
-    expect(lines[1]).toBe('├─ a (50×50 @ 0,0)')
-    expect(lines[2]).toBe('│  └─ …')
-    expect(lines[3]).toBe('└─ b (50×50 @ 50,0)')
-  })
-
-  test('deep nesting uses correct indentation', () => {
+  test('deep nesting increases indent', () => {
     const json = JSON.stringify([
       {
         id: 'a',
@@ -93,9 +48,32 @@ describe('formatLayout', () => {
       },
     ])
     const lines = formatLayout(json).split('\n')
-    expect(lines[0]).toBe('a (100×100 @ 0,0)')
-    expect(lines[1]).toBe('└─ b (50×50 @ 0,0)')
-    expect(lines[2]).toBe('   └─ c (25×25 @ 0,0)')
+    expect(lines[0]).toBe('a 100x100 0,0')
+    expect(lines[1]).toBe('  b 50x50 0,0')
+    expect(lines[2]).toBe('    c 25x25 0,0')
+  })
+
+  test('shows problems with ⚠ marker', () => {
+    const json = JSON.stringify([
+      { id: 'f1', x: 0, y: 0, width: 100, height: 50, problems: 'partially clipped' },
+    ])
+    expect(formatLayout(json)).toContain('⚠ partially clipped')
+  })
+
+  test('renders truncated children as …', () => {
+    const json = JSON.stringify([
+      {
+        id: 'root',
+        x: 0,
+        y: 0,
+        width: 100,
+        height: 100,
+        children: [{ id: 'a', x: 0, y: 0, width: 50, height: 50, children: '...' }],
+      },
+    ])
+    const lines = formatLayout(json).split('\n')
+    expect(lines[1]).toBe('  a 50x50 0,0')
+    expect(lines[2]).toBe('    …')
   })
 
   test('multiple top-level nodes separated by blank line', () => {
@@ -104,32 +82,31 @@ describe('formatLayout', () => {
       { id: 'b', x: 200, y: 0, width: 100, height: 100 },
     ])
     const lines = formatLayout(json).split('\n')
-    expect(lines[0]).toBe('a (100×100 @ 0,0)')
+    expect(lines[0]).toBe('a 100x100 0,0')
     expect(lines[1]).toBe('')
-    expect(lines[2]).toBe('b (100×100 @ 200,0)')
+    expect(lines[2]).toBe('b 100x100 200,0')
   })
 
-  test('appends footer with separator', () => {
+  test('footer with separator', () => {
     const json = JSON.stringify([{ id: 'f1', x: 0, y: 0, width: 100, height: 50 }])
     const out = formatLayout(json)
-    expect(out).toContain('──────')
+    expect(out).toContain('---')
     expect(out).toContain('pencil get --node <id>')
     expect(out).not.toContain('⚠ =')
   })
 
-  test('footer explains ⚠ marker when problems exist', () => {
+  test('footer explains ⚠ when problems exist', () => {
     const json = JSON.stringify([
       { id: 'f1', x: 0, y: 0, width: 100, height: 50, problems: 'clipped' },
     ])
-    const out = formatLayout(json)
-    expect(out).toContain('⚠ = layout problem')
+    expect(formatLayout(json)).toContain('⚠ = layout problem')
   })
 
   test('returns raw text for invalid JSON', () => {
     expect(formatLayout('not json')).toBe('not json')
   })
 
-  test('leaf nodes without children render cleanly', () => {
+  test('leaf nodes render without trailing …', () => {
     const json = JSON.stringify([
       {
         id: 'root',
@@ -142,6 +119,5 @@ describe('formatLayout', () => {
     ])
     const out = formatLayout(json)
     expect(out).not.toContain('…')
-    expect(out).toContain('└─ leaf')
   })
 })

@@ -19,35 +19,28 @@ export function formatLayout(jsonText: string): string {
 
   const lines: string[] = []
 
-  function render(node: LayoutNode, prefix: string, connector: string) {
-    const dim = `${node.width}×${node.height}`
-    const pos = ` @ ${node.x},${node.y}`
+  function render(node: LayoutNode, depth: number) {
+    const indent = '  '.repeat(depth)
     const warn = node.problems ? ` ⚠ ${node.problems}` : ''
-    lines.push(`${prefix}${connector}${node.id} (${dim}${pos})${warn}`)
-
-    const childPrefix = prefix + (connector === '├─ ' ? '│  ' : connector === '└─ ' ? '   ' : '')
+    lines.push(`${indent}${node.id} ${node.width}x${node.height} ${node.x},${node.y}${warn}`)
 
     if (node.children === '...') {
-      lines.push(`${childPrefix}└─ …`)
+      lines.push(`${'  '.repeat(depth + 1)}…`)
       return
     }
     if (!Array.isArray(node.children) || node.children.length === 0) return
-    const kids = node.children
-    for (let i = 0; i < kids.length; i++) {
-      const isLast = i === kids.length - 1
-      render(kids[i], childPrefix, isLast ? '└─ ' : '├─ ')
-    }
+    for (const child of node.children) render(child, depth + 1)
   }
 
   for (let i = 0; i < nodes.length; i++) {
     if (i > 0) lines.push('')
-    render(nodes[i], '', '')
+    render(nodes[i], 0)
   }
 
   const hasProblems = jsonText.includes('"problems"')
   lines.push('')
-  lines.push('─'.repeat(50))
-  lines.push('Geometry only (id, size, position). Inspect: pencil get --node <id>')
+  lines.push('---')
+  lines.push('Geometry only. Inspect: pencil get --node <id>')
   if (hasProblems) lines.push('⚠ = layout problem (clipped, overflow, etc.)')
 
   return lines.join('\n')
